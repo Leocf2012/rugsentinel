@@ -3,7 +3,7 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     
-    // ⚠️ COLE SUA CHAVE HELIUS AQUI (dentro das aspas)
+    // ⚠️ COLE SUA CHAVE HELIUS AQUI (entre as aspas)
     const HELIUS_KEY = '17c095a4-64a0-4a09-a544-f2f9905bff0c';
     const HELIUS_RPC = 'https://mainnet.helius-rpc.com/?api-key=' + HELIUS_KEY;
 
@@ -51,7 +51,6 @@ async function analisarToken(contract, HELIUS_RPC, HELIUS_KEY) {
       heliusData = { mintInfo, topHolders, creator };
     } catch (e) { 
       heliusErro = e.message; 
-      console.log('Helius erro:', e.message);
     }
   } else {
     heliusErro = 'Chave Helius nao configurada';
@@ -61,7 +60,7 @@ async function analisarToken(contract, HELIUS_RPC, HELIUS_KEY) {
   try {
     const rugRes = await fetch('https://api.rugcheck.xyz/v1/tokens/' + contract + '/report');
     if (rugRes.ok) security = await rugRes.json();
-  } catch (e) { console.log('RugCheck erro'); }
+  } catch (e) {}
 
   return { contract, pair, helius: heliusData, heliusErro, security };
 }
@@ -142,6 +141,7 @@ function getHTML() {
 '.btn-ignore{background:rgba(255,51,102,.15);color:#ff3366;border:1px solid rgba(255,51,102,.4);padding:12px;border-radius:10px;font-weight:800;cursor:pointer}',
 '.error{background:rgba(255,51,102,.1);border:1px solid rgba(255,51,102,.3);color:#ff3366;padding:14px;border-radius:12px;text-align:center;display:none;margin-bottom:16px}',
 '#loading{text-align:center;padding:20px;color:#00ff9d;display:none}',
+'.debug{color:#00ff9d;font-family:monospace;font-size:11px;padding:8px;background:rgba(0,255,157,.05);border-radius:8px;margin-top:10px}',
 '.ignored{background:#14141f;border:1px solid #2a2a3d;border-radius:12px;padding:14px;margin-top:16px}',
 '.ignored-title{font-size:11px;color:#7a7a95;text-transform:uppercase;letter-spacing:1.5px;font-weight:800;margin-bottom:10px}',
 '.ignored-item{display:flex;justify-content:space-between;padding:8px;background:#1c1c2a;border-radius:6px;margin-bottom:6px;font-size:12px}',
@@ -161,23 +161,24 @@ function getHTML() {
 'function getIgnored(){try{return JSON.parse(localStorage.getItem("rug_ignored")||"[]");}catch(e){return [];}}',
 'function saveIgnored(list){localStorage.setItem("rug_ignored",JSON.stringify(list));}',
 'function renderIgnored(){var list=getIgnored();var box=document.getElementById("ignoredBox");var el=document.getElementById("ignoredList");if(!list.length){box.style.display="none";return;}box.style.display="block";el.innerHTML=list.map(function(i){return "<div class=ignored-item><span style=font-weight:800>$"+i.symbol+"</span><span style=color:#7a7a95;font-family:monospace>"+shortAddr(i.contract)+"</span></div>";}).join("");}',
-'async function scan(){
-var c=document.getElementById("contract").value.trim();
-if(!c){alert("Cole o contrato");return;}
-var btn=document.getElementById("btn"),ld=document.getElementById("loading"),err=document.getElementById("error"),res=document.getElementById("result");
-btn.disabled=true;ld.style.display="block";err.style.display="none";res.innerHTML="";
-try{
-  var r=await fetch("/api/scan/"+encodeURIComponent(c));
-  var txt=await r.text();
-  res.innerHTML="<div style='color:#00ff9d;font-family:monospace;font-size:11px;padding:10px'>STATUS: "+r.status+" | CHARS: "+txt.length+"</div>";
-  var data=JSON.parse(txt);
-  res.innerHTML+="<div style='color:#00ff9d;font-family:monospace;font-size:11px;padding:10px'>PARSE OK. TEM pair? "+(data.pair?"SIM":"NAO")+"</div>";
-  render(data);
-}catch(e){
-  err.textContent="ERRO: "+e.message;
-  err.style.display="block";
-}finally{btn.disabled=false;ld.style.display="none";}
-},
+'async function scan(){',
+'var c=document.getElementById("contract").value.trim();',
+'if(!c){alert("Cole o contrato");return;}',
+'var btn=document.getElementById("btn"),ld=document.getElementById("loading"),err=document.getElementById("error"),res=document.getElementById("result");',
+'btn.disabled=true;ld.style.display="block";err.style.display="none";res.innerHTML="";',
+'try{',
+'  var r=await fetch("/api/scan/"+encodeURIComponent(c));',
+'  var txt=await r.text();',
+'  res.innerHTML="<div class=debug>1. STATUS: "+r.status+" | CHARS: "+txt.length+"</div>";',
+'  var data=JSON.parse(txt);',
+'  res.innerHTML+="<div class=debug>2. PARSE OK | TEM pair? "+(data.pair?"SIM":"NAO")+" | TEM helius? "+(data.helius?"SIM":"NAO")+"</div>";',
+'  render(data);',
+'  res.innerHTML+="<div class=debug>3. RENDER executado</div>";',
+'}catch(e){',
+'  err.textContent="ERRO: "+e.message;',
+'  err.style.display="block";',
+'}finally{btn.disabled=false;ld.style.display="none";}',
+'}',
 'function render(d){',
 'var p=d.pair;var s=d.security;var h=d.helius;',
 'var sym=(p.baseToken&&p.baseToken.symbol)||"?";',
@@ -252,4 +253,4 @@ try{
 'renderIgnored();',
 '</script></body></html>'
 ].join('');
-}
+    }

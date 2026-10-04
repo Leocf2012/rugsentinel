@@ -17,5 +17,5 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
-          secrets: |
-            HELIUS_KEY
+        env:
+          HELIUS_KEY: ${{ secrets.HELIUS_KEY }}

@@ -1,0 +1,112 @@
+// ============================================================
+// RUGSENTINEL - Cloudflare Worker
+// ============================================================
+
+const CONFIG = {
+  HELIUS_API_KEY: '17c095a4-64a0-4a09-a544-f2f9905bff0c',
+  HELIUS_RPC: 'https://mainnet.helius-rpc.com',
+  FETCH_TIMEOUT: 15000
+};
+
+const HTML_LINHAS = [
+'<!DOCTYPE html>',
+'<html lang="pt-BR">',
+'<head>',
+'<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
+'<title>RugSentinel</title>',
+'<style>',
+'*{box-sizing:border-box;margin:0;padding:0}',
+'body{background:#0a0a0f;color:#e8e8f0;font-family:-apple-system,sans-serif;min-height:100vh;padding:20px}',
+'.app{max-width:480px;margin:0 auto}',
+'.header{text-align:center;padding:20px 0;border-bottom:1px solid #2a2a3d;margin-bottom:20px}',
+'.logo{font-size:24px;font-weight:900;background:linear-gradient(135deg,#00ff9d,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}',
+'.tagline{font-size:11px;color:#7a7a95;letter-spacing:2px;margin-top:4px}',
+'.input-box{display:flex;gap:8px;margin-bottom:16px}',
+'input{flex:1;padding:14px;border-radius:12px;border:1px solid #2a2a3d;background:#14141f;color:#fff;font-family:monospace;outline:none;min-width:0}',
+'button{padding:14px 18px;border-radius:12px;border:none;background:linear-gradient(135deg,#00ff9d,#00d4ff);color:#0a0a0f;font-weight:800;cursor:pointer}',
+'button:disabled{opacity:.5}',
+'.card{background:#14141f;border:1px solid #2a2a3d;border-radius:16px;overflow:hidden;margin-top:16px}',
+'.token-head{padding:16px;background:linear-gradient(135deg,rgba(0,255,157,.08),rgba(0,212,255,.05));display:flex;align-items:center;gap:12px}',
+'.avatar{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#00ff9d,#00d4ff);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#0a0a0f}',
+'.token-name{font-size:16px;font-weight:800}',
+'.token-symbol{font-size:12px;color:#00ff9d;font-family:monospace}',
+'.grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#2a2a3d}',
+'.stat{background:#14141f;padding:12px 14px}',
+'.stat-label{font-size:10px;color:#7a7a95;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px}',
+'.stat-value{font-size:14px;font-weight:800;font-family:monospace}',
+'.section{padding:14px 16px;border-top:1px solid #2a2a3d}',
+'.section-title{font-size:11px;color:#7a7a95;text-transform:uppercase;letter-spacing:1.5px;font-weight:800;margin-bottom:10px}',
+'.row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px}',
+'.row-label{color:#7a7a95}',
+'.row-value{font-weight:800;font-family:monospace}',
+'.links{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 16px}',
+'.link{background:#1c1c2a;border:1px solid #2a2a3d;border-radius:8px;padding:10px;color:#e8e8f0;text-decoration:none;text-align:center;font-size:12px;font-weight:700}',
+'.error{background:rgba(255,51,102,.1);border:1px solid rgba(255,51,102,.3);color:#ff3366;padding:14px;border-radius:12px;text-align:center;margin-bottom:16px;display:none}',
+'#loading{text-align:center;padding:20px;color:#00ff9d;display:none}',
+'</style>',
+'</head>',
+'<body>',
+'<div class="app">',
+'<div class="header">',
+'<div class="logo">RugSentinel</div>',
+'<div class="tagline">PUMP.FUN SCANNER</div>',
+'</div>',
+'<div class="input-box">',
+'<input id="contract" placeholder="Cole o contrato Solana...">',
+'<button id="btn" onclick="scan()">Escanear</button>',
+'</div>',
+'<div id="loading">Consultando...</div>',
+'<div id="error" class="error"></div>',
+'<div id="result"></div>',
+'</div>',
+'<script>',
+'function fmt(n){if(!n)return "--";if(n>=1e9)return "$"+(n/1e9).toFixed(2)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(2)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(1)+"K";return "$"+n.toFixed(2);}',
+'function age(ts){if(!ts)return "--";var m=Math.floor((Date.now()-ts)/60000);if(m<60)return m+"m";var h=Math.floor(m/60);if(h<24)return h+"h";return Math.floor(h/24)+"d";}',
+'function shortAddr(a){if(!a)return "--";return a.slice(0,6)+"..."+a.slice(-4);}',
+'async function scan(){',
+'var input=document.getElementById("contract").value.trim();',
+'var btn=document.getElementById("btn");',
+'var loading=document.getElementById("loading");',
+'var error=document.getElementById("error");',
+'var result=document.getElementById("result");',
+'if(!input){alert("Cole o contrato");return;}',
+'btn.disabled=true;loading.style.display="block";error.style.display="none";result.innerHTML="";',
+'try{',
+'var res=await fetch("/api/scan/"+encodeURIComponent(input));',
+'if(!res.ok)throw new Error("Erro: "+res.status);',
+'var data=await res.json();',
+'if(data.error)throw new Error(data.error);',
+'render(data);',
+'}catch(e){error.innerText="❌ "+e.message;error.style.display="block";}',
+'finally{btn.disabled=false;loading.style.display="none";}',
+'}'
+];
+
+const HTML_APP = HTML_LINHAS.join('\n');
+
+// ------------------------------------------------------------
+// UTILITÁRIOS
+// ------------------------------------------------------------
+async function fetchComTimeout(url, options, timeout) {
+  options = options || {};
+  timeout = timeout || CONFIG.FETCH_TIMEOUT;
+  var controller = new AbortController();
+  var timer = setTimeout(function(){ controller.abort(); }, timeout);
+  try {
+    var headers = { 'User-Agent': 'RugSentinel/1.0' };
+    if (options.headers) {
+      for (var k in options.headers) headers[k] = options.headers[k];
+    }
+    var res = await fetch(url, {
+      method: options.method || 'GET',
+      headers: headers,
+      body: options.body,
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    return res;
+  } catch (e) {
+    clearTimeout(timer);
+    throw e;
+  }
+  }

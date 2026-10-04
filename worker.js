@@ -173,3 +173,105 @@ async function getCreator(mint) {
     return (creator && creator.address) || null;
   } catch (e) { return null; }
 }
+
+// ------------------------------------------------------------
+// CORE: análise completa
+// ------------------------------------------------------------
+async function analisarToken(contract) {
+  var solana = !contract.startsWith('0x');
+
+  var dexRes = await fetchComTimeout(
+    'https://api.dexscreener.com/latest/dex/search?q=' + encodeURIComponent(contract)
+  );
+  if (!dexRes.ok) throw new Error('DexScreener nao respondeu');
+  var dexData = await dexRes.json();
+  if (!dexData.pairs || !dexData.pairs.length) throw new Error('Token nao encontrado');
+
+  var pair = dexData.pairs.sort(function(a, b) {
+    return ((b.liquidity && b.liquidity.usd) || 0) - ((a.liquidity && a.liquidity.usd) || 0);
+  })[0];
+
+  var heliusData = null;
+  if (solana && CONFIG.HELIUS_API_KEY && CONFIG.HELIUS_API_KEY !== 'SUA_CHAVE_HELIUS_AQUI') {
+    try {
+      var mintInfo = await getMintInfo(contract).catch(function(){ return null; });
+      var topHolders = await getTopHolders(contract, 20).catch(function(){ return []; });
+      var creator = await getCreator(contract).catch(function(){ return null; });
+      heliusData = { mintInfo: mintInfo, topHolders: topHolders, creator: creator };
+    } catch (e) { console.log('Helius erro:', e.message); }
+  }
+
+  var security = null;
+  var securitySource = null;
+  if (solana) {
+    try {
+      var rugRes = await fetchComTimeout('https://api.rugcheck.xyz/v1/tokens/' + contract + '/report');
+      if (rugRes.ok) {
+        var text = await rugRes.text();
+        if (text.startsWith('{')) {
+          security = JSON.parse(text);
+          securitySource = 'rugcheck';
+        }
+      }
+    } catch (e) { console.log('RugCheck erro'); }
+  }
+
+  return {
+    success: true,
+    contract: contract,
+    isSolana: solana,
+    pair: pair,
+    security: security,
+    securitySource: securitySource,
+    helius: heliusData
+  };
+}
+
+// ------------------------------------------------------------
+// ROTEAMENTO
+// ------------------------------------------------------------
+export default {
+  async fetch(request) {
+    var url = new URL(request.url);
+    var path = url.pathname;
+
+    var corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    };
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+
+    if (path === '/' || path === '/index.html') {
+      return new Response(HTML_APP, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+
+    if (path.indexOf('/api/scan/') === 0) {
+      var contract = decodeURIComponent(path.replace('/api/scan/', ''));
+      if (!contract) {
+        return new Response(JSON.stringify({ error: 'Contrato vazio' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      }
+      try {
+        var result = await analisarToken(contract);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      }
+    }
+
+    return new Response(JSON.stringify({ error: 'Rota nao encontrada' }), {
+      status: 404, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  }
+};

@@ -10,6 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Substituir chave Helius
+        run: |
+          sed -i 's|HELIUS_API_KEY_PLACEHOLDER|${{ secrets.HELIUS_API_KEY }}|g' worker.js
+
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:

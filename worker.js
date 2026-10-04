@@ -110,3 +110,66 @@ async function fetchComTimeout(url, options, timeout) {
     throw e;
   }
   }
+
+// ------------------------------------------------------------
+// HELIUS: dados on-chain
+// ------------------------------------------------------------
+async function getMintInfo(mint) {
+  var body = {
+    jsonrpc: '2.0', id: 1, method: 'getAccountInfo',
+    params: [mint, { encoding: 'jsonParsed' }]
+  };
+  var res = await fetchComTimeout(
+    CONFIG.HELIUS_RPC + '/?api-key=' + CONFIG.HELIUS_API_KEY,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+  );
+  if (!res.ok) throw new Error('Helius falhou');
+  var data = await res.json();
+  if (!data.result || !data.result.value || !data.result.value.data || !data.result.value.data.parsed) return null;
+  var info = data.result.value.data.parsed.info;
+  return {
+    supply: parseInt(info.supply || '0'),
+    decimals: info.decimals || 0,
+    mintAuthority: info.mintAuthority || null,
+    freezeAuthority: info.freezeAuthority || null
+  };
+}
+
+async function getTopHolders(mint, limit) {
+  limit = limit || 20;
+  var body = {
+    jsonrpc: '2.0', id: 1, method: 'getTokenLargestAccounts',
+    params: [mint]
+  };
+  var res = await fetchComTimeout(
+    CONFIG.HELIUS_RPC + '/?api-key=' + CONFIG.HELIUS_API_KEY,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+  );
+  if (!res.ok) throw new Error('Helius holders falhou');
+  var data = await res.json();
+  if (!data.result || !data.result.value) return [];
+  var mintInfo = await getMintInfo(mint);
+  var totalSupply = (mintInfo && mintInfo.supply) || 1;
+  return data.result.value.slice(0, limit).map(function(acc) {
+    return {
+      address: acc.address,
+      amount: parseInt(acc.amount || '0'),
+      pct: (parseInt(acc.amount || '0') / totalSupply) * 100
+    };
+  });
+}
+
+async function getCreator(mint) {
+  try {
+    var body = { jsonrpc: '2.0', id: 1, method: 'getAsset', params: { id: mint } };
+    var res = await fetchComTimeout(
+      CONFIG.HELIUS_RPC + '/?api-key=' + CONFIG.HELIUS_API_KEY,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    );
+    if (!res.ok) return null;
+    var data = await res.json();
+    var creators = (data.result && data.result.creators) || [];
+    var creator = creators.find(function(c){ return c.verified; }) || creators[0];
+    return (creator && creator.address) || null;
+  } catch (e) { return null; }
+}

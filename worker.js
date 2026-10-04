@@ -161,17 +161,23 @@ function getHTML() {
 'function getIgnored(){try{return JSON.parse(localStorage.getItem("rug_ignored")||"[]");}catch(e){return [];}}',
 'function saveIgnored(list){localStorage.setItem("rug_ignored",JSON.stringify(list));}',
 'function renderIgnored(){var list=getIgnored();var box=document.getElementById("ignoredBox");var el=document.getElementById("ignoredList");if(!list.length){box.style.display="none";return;}box.style.display="block";el.innerHTML=list.map(function(i){return "<div class=ignored-item><span style=font-weight:800>$"+i.symbol+"</span><span style=color:#7a7a95;font-family:monospace>"+shortAddr(i.contract)+"</span></div>";}).join("");}',
-'async function scan(){',
-'var c=document.getElementById("contract").value.trim();',
-'if(!c){alert("Cole o contrato");return;}',
-'var ignored=getIgnored();',
-'if(ignored.some(function(i){return i.contract===c;})){alert("Token na lista de ignorados");return;}',
-'var btn=document.getElementById("btn"),ld=document.getElementById("loading"),err=document.getElementById("error"),res=document.getElementById("result");',
-'btn.disabled=true;ld.style.display="block";err.style.display="none";res.innerHTML="";',
-'try{var r=await fetch("/api/scan/"+encodeURIComponent(c));var data=await r.json();if(data.error)throw new Error(data.error);render(data);}',
-'catch(e){err.textContent="ERRO: "+e.message;err.style.display="block";}',
-'finally{btn.disabled=false;ld.style.display="none";}',
-'}',
+'async function scan(){
+var c=document.getElementById("contract").value.trim();
+if(!c){alert("Cole o contrato");return;}
+var btn=document.getElementById("btn"),ld=document.getElementById("loading"),err=document.getElementById("error"),res=document.getElementById("result");
+btn.disabled=true;ld.style.display="block";err.style.display="none";res.innerHTML="";
+try{
+  var r=await fetch("/api/scan/"+encodeURIComponent(c));
+  var txt=await r.text();
+  res.innerHTML="<div style='color:#00ff9d;font-family:monospace;font-size:11px;padding:10px'>STATUS: "+r.status+" | CHARS: "+txt.length+"</div>";
+  var data=JSON.parse(txt);
+  res.innerHTML+="<div style='color:#00ff9d;font-family:monospace;font-size:11px;padding:10px'>PARSE OK. TEM pair? "+(data.pair?"SIM":"NAO")+"</div>";
+  render(data);
+}catch(e){
+  err.textContent="ERRO: "+e.message;
+  err.style.display="block";
+}finally{btn.disabled=false;ld.style.display="none";}
+},
 'function render(d){',
 'var p=d.pair;var s=d.security;var h=d.helius;',
 'var sym=(p.baseToken&&p.baseToken.symbol)||"?";',

@@ -2,7 +2,9 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
-    const HELIUS_KEY = env.HELIUS_KEY || '';
+    
+    // ⚠️ COLE SUA CHAVE HELIUS AQUI (dentro das aspas)
+    const HELIUS_KEY = '17c095a4-64a0-4a09-a544-f2f9905bff0c';
     const HELIUS_RPC = 'https://mainnet.helius-rpc.com/?api-key=' + HELIUS_KEY;
 
     const HTML_APP = getHTML();
@@ -32,9 +34,6 @@ function json(obj, status) {
   });
 }
 
-// ============================================================
-// ANÁLISE COMPLETA
-// ============================================================
 async function analisarToken(contract, HELIUS_RPC, HELIUS_KEY) {
   const dexRes = await fetch('https://api.dexscreener.com/latest/dex/search?q=' + encodeURIComponent(contract));
   if (!dexRes.ok) throw new Error("DexScreener off");
@@ -43,13 +42,19 @@ async function analisarToken(contract, HELIUS_RPC, HELIUS_KEY) {
   const pair = dexData.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
 
   let heliusData = null;
+  let heliusErro = null;
   if (HELIUS_KEY && HELIUS_KEY !== 'COLE_SUA_CHAVE_HELIUS_AQUI') {
     try {
       const mintInfo = await getMintInfo(contract, HELIUS_RPC);
       const topHolders = await getTopHolders(contract, HELIUS_RPC, mintInfo);
       const creator = await getCreator(contract, HELIUS_RPC);
       heliusData = { mintInfo, topHolders, creator };
-    } catch (e) { console.log('Helius erro:', e.message); }
+    } catch (e) { 
+      heliusErro = e.message; 
+      console.log('Helius erro:', e.message);
+    }
+  } else {
+    heliusErro = 'Chave Helius nao configurada';
   }
 
   let security = null;
@@ -58,7 +63,7 @@ async function analisarToken(contract, HELIUS_RPC, HELIUS_KEY) {
     if (rugRes.ok) security = await rugRes.json();
   } catch (e) { console.log('RugCheck erro'); }
 
-  return { contract, pair, helius: heliusData, security };
+  return { contract, pair, helius: heliusData, heliusErro, security };
 }
 
 async function getMintInfo(mint, rpc) {
@@ -67,8 +72,9 @@ async function getMintInfo(mint, rpc) {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getAccountInfo", params: [mint, { encoding: "jsonParsed" }] })
   });
   const j = await r.json();
+  if (j.error) throw new Error('Helius getAccountInfo: ' + (j.error.message || 'erro'));
   const info = j.result?.value?.data?.parsed?.info;
-  if (!info) return null;
+  if (!info) throw new Error('Helius: mint info nao encontrado');
   return { supply: parseInt(info.supply), decimals: info.decimals, mintAuthority: info.mintAuthority, freezeAuthority: info.freezeAuthority };
 }
 
@@ -78,6 +84,7 @@ async function getTopHolders(mint, rpc, mintInfo) {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getTokenLargestAccounts", params: [mint] })
   });
   const j = await r.json();
+  if (j.error) throw new Error('Helius getTopHolders: ' + (j.error.message || 'erro'));
   const total = mintInfo?.supply || 1;
   return (j.result?.value || []).slice(0, 20).map(a => ({ address: a.address, amount: parseInt(a.amount), pct: (parseInt(a.amount) / total) * 100 }));
 }
@@ -95,9 +102,6 @@ async function getCreator(mint, rpc) {
   } catch (e) { return null; }
 }
 
-// ============================================================
-// HTML DO APP
-// ============================================================
 function getHTML() {
   return [
 '<!DOCTYPE html>',
@@ -151,7 +155,7 @@ function getHTML() {
 '<div id="ignoredBox" class="ignored" style="display:none"><div class="ignored-title">Tokens Ignorados</div><div id="ignoredList"></div></div>',
 '</div>',
 '<script>',
-'function fmt(n){if(!n)return "--";if(n>=1e9)return "$"+(n/1e9).toFixed(2)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(2)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(1)+"K";return "$"+Number(n).toFixed(2);}',
+'function fmt(n){if(!n||n===0)return "--";if(n>=1e9)return "$"+(n/1e9).toFixed(2)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(2)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(1)+"K";return "$"+Number(n).toFixed(2);}',
 'function fmtAge(ts){if(!ts)return "--";var m=Math.floor((Date.now()-ts)/60000);if(m<60)return m+"m";var h=Math.floor(m/60);if(h<24)return h+"h";return Math.floor(h/24)+"d";}',
 'function shortAddr(a){if(!a)return "--";return a.slice(0,6)+"..."+a.slice(-4);}',
 'function getIgnored(){try{return JSON.parse(localStorage.getItem("rug_ignored")||"[]");}catch(e){return [];}}',
@@ -182,7 +186,7 @@ function getHTML() {
 'var freezeAuth=(h&&h.mintInfo&&h.mintInfo.freezeAuthority)?"ATIVO":"Fechado";',
 'var creator=(s&&s.creator)||(h&&h.creator)||"--";',
 'var supply="--";',
-'if(h&&h.mintInfo&&h.mintInfo.supply){supply=(h.mintInfo.supply/Math.pow(10,h.mintInfo.decimals||0)).toLocaleString("en-US",{maximumFractionDigits:0});}',
+'if(h&&h.mintInfo&&h.mintInfo.supply&&h.mintInfo.supply>0){supply=(h.mintInfo.supply/Math.pow(10,h.mintInfo.decimals||0)).toLocaleString("en-US",{maximumFractionDigits:0});}',
 'var totalHolders=(s&&s.totalHolders)||(h&&h.topHolders&&h.topHolders.length)||"--";',
 'if(top10>60)score-=15;else if(top10>40)score-=5;',
 'if(mintAuth==="ATIVO")score-=20;',
@@ -196,7 +200,7 @@ function getHTML() {
 'var chColor=ch>=0?"#00ff9d":"#ff3366";',
 'var html="";',
 'html+="<div class=card>";',
-'html+="<div class=token-head><div class=avatar>"+sym.slice(0,2).toUpperCase()+"</div><div style=flex:1><div class=tname>"+name+"</div><div class=tsym>$"+sym+"</div></div><div class=badge style=background:"+scoreColor+"22;color:"+scoreColor+";border:1px+solid+"+scoreColor+"55>"+score+"/100</div></div>";',
+'html+="<div class=token-head><div class=avatar>"+sym.slice(0,2).toUpperCase()+"</div><div style=flex:1><div class=tname>"+name+"</div><div class=tsym>$"+sym+"</div></div><div class=badge style=background:"+scoreColor+"22;color:"+scoreColor+";border:1px solid "+scoreColor+"55>"+score+"/100</div></div>";',
 'html+="<div class=grid>";',
 'html+="<div class=stat><div class=stat-label>Preco USD</div><div class=stat-value>"+(p.priceUsd?"$"+Number(p.priceUsd).toFixed(6):"--")+"</div></div>";',
 'html+="<div class=stat><div class=stat-label>Variacao 24h</div><div class=stat-value style=color:"+chColor+">"+chSign+Number(ch).toFixed(1)+"%</div></div>";',

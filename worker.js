@@ -3,7 +3,7 @@
 // ============================================================
 
 const CONFIG = {
-  HELIUS_API_KEY: '17c095a4-64a0-4a09-a544-f2f9905bff0c',
+  HELIUS_API_KEY: 'HELIUS_API_KEY_PLACEHOLDER',
   HELIUS_RPC: 'https://mainnet.helius-rpc.com',
   FETCH_TIMEOUT: 15000
 };
@@ -61,7 +61,7 @@ const HTML_LINHAS = [
 '</div>',
 '<script>',
 'function fmt(n){if(!n)return "--";if(n>=1e9)return "$"+(n/1e9).toFixed(2)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(2)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(1)+"K";return "$"+n.toFixed(2);}',
-'function age(ts){if(!ts)return "--";var m=Math.floor((Date.now()-ts)/60000);if(m<60)return m+"m";var h=Math.floor(m/60);if(h<24)return h+"h";return Math.floor(h/24)+"d";}',
+'function fmtAge(ts){if(!ts)return "--";var m=Math.floor((Date.now()-ts)/60000);if(m<60)return m+"m";var h=Math.floor(m/60);if(h<24)return h+"h";return Math.floor(h/24)+"d";}',
 'function shortAddr(a){if(!a)return "--";return a.slice(0,6)+"..."+a.slice(-4);}',
 'async function scan(){',
 'var input=document.getElementById("contract").value.trim();',
@@ -77,9 +77,76 @@ const HTML_LINHAS = [
 'var data=await res.json();',
 'if(data.error)throw new Error(data.error);',
 'render(data);',
-'}catch(e){error.innerText="❌ "+e.message;error.style.display="block";}',
+'}catch(e){error.innerText="ERRO: "+e.message;error.style.display="block";}',
 'finally{btn.disabled=false;loading.style.display="none";}',
-'}'
+'}',
+'function render(data){',
+'var pair=data.pair;var sec=data.security;var source=data.securitySource;var helius=data.helius;',
+'var age=fmtAge(pair.pairCreatedAt);var ch1=(pair.priceChange&&pair.priceChange.h1)||0;',
+'var mc=fmt(pair.fdv||pair.marketCap);var liq=fmt(pair.liquidity&&pair.liquidity.usd);var vol=fmt(pair.volume&&pair.volume.h24);',
+'var totalSupply="--",decimals="--",mintAuth="--",freezeAuth="--",creator="--";var holders=[];',
+'if(helius&&helius.mintInfo){',
+'totalSupply=helius.mintInfo.supply?(helius.mintInfo.supply/Math.pow(10,helius.mintInfo.decimals)).toLocaleString("en-US",{maximumFractionDigits:0}):"--";',
+'decimals=helius.mintInfo.decimals||"--";',
+'mintAuth=helius.mintInfo.mintAuthority?"ATIVO":"Fechado";',
+'freezeAuth=helius.mintInfo.freezeAuthority?"ATIVO":"Fechado";',
+'}',
+'if(helius&&helius.topHolders&&helius.topHolders.length){holders=helius.topHolders;}',
+'if(helius&&helius.creator)creator=shortAddr(helius.creator);',
+'var top10="--",lp="--",risks="Nenhum",rugScore=null;',
+'if(holders.length){var t10=holders.slice(0,10).reduce(function(a,b){return a+(b.pct||0);},0);top10=t10.toFixed(1)+"%";}',
+'if(sec&&source==="rugcheck"){lp=(sec.lpLocked||sec.lpBurned)?"Travada":"Livre";if(sec.risks&&sec.risks.length)risks=sec.risks.map(function(r){return r.name;}).slice(0,3).join(", ");rugScore=sec.score_normalised;}',
+'var score=50;',
+'if((pair.liquidity&&pair.liquidity.usd||0)>100000)score+=20;else if((pair.liquidity&&pair.liquidity.usd||0)>20000)score+=10;else score-=15;',
+'if(rugScore)score=Math.round(rugScore);',
+'if(mintAuth==="ATIVO")score-=15;if(freezeAuth==="ATIVO")score-=10;',
+'if(top10!=="--"&&parseFloat(top10)>60)score-=15;else if(top10!=="--"&&parseFloat(top10)>40)score-=5;',
+'if(lp==="Livre")score-=10;',
+'score=Math.max(0,Math.min(100,Math.round(score)));',
+'var scoreColor=score>=75?"#00ff9d":score>=50?"#ffaa00":"#ff3366";',
+'var symbol=(pair.baseToken&&pair.baseToken.symbol)||"?";var avatar=symbol.slice(0,2).toUpperCase();',
+'var ch1Color=ch1>=0?"#00ff9d":"#ff3366";',
+'var holdersHTML="";',
+'if(holders.length){holdersHTML=holders.slice(0,10).map(function(h,i){var pct=h.pct||0;return "<div class=row><span class=row-label>#"+(i+1)+" "+shortAddr(h.address)+"</span><span class=row-value>"+pct.toFixed(2)+"%</span></div>";}).join("");}',
+'else{holdersHTML="<div style=color:#7a7a95;font-size:12px;padding:8px>Sem holders</div>";}',
+'var socialLinks="";',
+'if(pair.info&&pair.info.socials)pair.info.socials.forEach(function(s){socialLinks+="<a href=\\""+s.url+"\\" target=_blank class=link>"+s.type+"</a>";});',
+'if(pair.info&&pair.info.websites)pair.info.websites.forEach(function(w){socialLinks+="<a href=\\""+w.url+"\\" target=_blank class=link>Site</a>";});',
+'var html="";',
+'html+="<div class=card>";',
+'html+="<div class=token-head><div class=avatar>"+avatar+"</div><div><div class=token-name>"+((pair.baseToken&&pair.baseToken.name)||"?")+"</div><div class=token-symbol>$"+symbol+"</div></div><div style=margin-left:auto;padding:6px 12px;border-radius:12px;background:"+scoreColor+";color:#0a0a0f;font-weight:800>"+score+"/100</div></div>";',
+'html+="<div class=grid>";',
+'html+="<div class=stat><div class=stat-label>Preco 1h</div><div class=stat-value style=color:"+ch1Color+">"+(ch1>=0?"+":"")+ch1.toFixed(1)+"%</div></div>";',
+'html+="<div class=stat><div class=stat-label>Idade</div><div class=stat-value>"+age+"</div></div>";',
+'html+="<div class=stat><div class=stat-label>MC</div><div class=stat-value>"+mc+"</div></div>";',
+'html+="<div class=stat><div class=stat-label>Liquidez</div><div class=stat-value>"+liq+"</div></div>";',
+'html+="<div class=stat><div class=stat-label>Vol 24h</div><div class=stat-value>"+vol+"</div></div>";',
+'html+="<div class=stat><div class=stat-label>DEX</div><div class=stat-value>"+((pair.dexId||"--").toUpperCase())+"</div></div>";',
+'html+="</div>";',
+'html+="<div class=section><div class=section-title>Supply</div>";',
+'html+="<div class=row><span class=row-label>Total</span><span class=row-value>"+totalSupply+"</span></div>";',
+'html+="<div class=row><span class=row-label>Mint Auth</span><span class=row-value>"+mintAuth+"</span></div>";',
+'html+="<div class=row><span class=row-label>Freeze Auth</span><span class=row-value>"+freezeAuth+"</span></div>";',
+'html+="<div class=row><span class=row-label>Creator</span><span class=row-value>"+creator+"</span></div></div>";',
+'html+="<div class=section><div class=section-title>Top Holders</div>"+holdersHTML;',
+'html+="<div class=row style=margin-top:8px><span class=row-label>Top 10</span><span class=row-value>"+top10+"</span></div></div>";',
+'html+="<div class=section><div class=section-title>Seguranca</div>";',
+'html+="<div class=row><span class=row-label>Score RugCheck</span><span class=row-value>"+(rugScore||"--")+"</span></div>";',
+'html+="<div class=row><span class=row-label>LP</span><span class=row-value>"+lp+"</span></div>";',
+'html+="<div class=row><span class=row-label>Riscos</span><span class=row-value>"+risks+"</span></div></div>";',
+'html+="<div class=links>";',
+'html+="<a href=https://dexscreener.com/"+pair.chainId+"/"+pair.pairAddress+" target=_blank class=link>DexScreener</a>";',
+'html+="<a href=https://rugcheck.xyz/tokens/"+data.contract+" target=_blank class=link>RugCheck</a>";',
+'html+="<a href=https://solscan.io/token/"+data.contract+" target=_blank class=link>Solscan</a>";',
+'html+="<a href=https://birdeye.so/token/"+data.contract+"?chain=solana" target=_blank class=link>Birdeye</a>";',
+'socialLinks',
+'html+="</div>";',
+'html+="</div>";',
+'result.innerHTML=html;',
+'}',
+'</script>',
+'</body>',
+'</html>'
 ];
 
 const HTML_APP = HTML_LINHAS.join('\n');
@@ -109,10 +176,10 @@ async function fetchComTimeout(url, options, timeout) {
     clearTimeout(timer);
     throw e;
   }
-  }
+}
 
 // ------------------------------------------------------------
-// HELIUS: dados on-chain
+// HELIUS
 // ------------------------------------------------------------
 async function getMintInfo(mint) {
   var body = {
@@ -175,24 +242,22 @@ async function getCreator(mint) {
 }
 
 // ------------------------------------------------------------
-// CORE: análise completa
+// CORE
 // ------------------------------------------------------------
 async function analisarToken(contract) {
   var solana = !contract.startsWith('0x');
-
   var dexRes = await fetchComTimeout(
     'https://api.dexscreener.com/latest/dex/search?q=' + encodeURIComponent(contract)
   );
   if (!dexRes.ok) throw new Error('DexScreener nao respondeu');
   var dexData = await dexRes.json();
   if (!dexData.pairs || !dexData.pairs.length) throw new Error('Token nao encontrado');
-
   var pair = dexData.pairs.sort(function(a, b) {
     return ((b.liquidity && b.liquidity.usd) || 0) - ((a.liquidity && a.liquidity.usd) || 0);
   })[0];
 
   var heliusData = null;
-  if (solana && CONFIG.HELIUS_API_KEY && CONFIG.HELIUS_API_KEY !== 'SUA_CHAVE_HELIUS_AQUI') {
+  if (solana && CONFIG.HELIUS_API_KEY && CONFIG.HELIUS_API_KEY !== 'HELIUS_API_KEY_PLACEHOLDER') {
     try {
       var mintInfo = await getMintInfo(contract).catch(function(){ return null; });
       var topHolders = await getTopHolders(contract, 20).catch(function(){ return []; });
@@ -217,13 +282,8 @@ async function analisarToken(contract) {
   }
 
   return {
-    success: true,
-    contract: contract,
-    isSolana: solana,
-    pair: pair,
-    security: security,
-    securitySource: securitySource,
-    helius: heliusData
+    success: true, contract: contract, isSolana: solana,
+    pair: pair, security: security, securitySource: securitySource, helius: heliusData
   };
 }
 
@@ -234,23 +294,19 @@ export default {
   async fetch(request) {
     var url = new URL(request.url);
     var path = url.pathname;
-
     var corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type'
     };
-
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
-
     if (path === '/' || path === '/index.html') {
       return new Response(HTML_APP, {
         headers: { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' }
       });
     }
-
     if (path.indexOf('/api/scan/') === 0) {
       var contract = decodeURIComponent(path.replace('/api/scan/', ''));
       if (!contract) {
@@ -269,7 +325,6 @@ export default {
         });
       }
     }
-
     return new Response(JSON.stringify({ error: 'Rota nao encontrada' }), {
       status: 404, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });

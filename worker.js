@@ -1,171 +1,319 @@
-import { getHTML } from './html.js';
+const HELIUS_KEY = process.env.HELIUS_KEY;
+const ETHERSCAN_KEY = process.env.ETHERSCAN_KEY;
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CryptoGuard PRO — Multi-Rede</title>
+<style>
+:root {
+    --bg: #0a0a0f; --card: #14141f; --border: #2a2a3d;
+    --ok: #00ff9d; --warn: #ffaa00; --danger: #ff3366; --info: #00d4ff;
+    --eth: #627eea; --bsc: #f3ba2f; --sol: #00ffa3; --base: #0052ff; --arb: #28a0f0;
+    --text: #e8e8f0; --muted: #7a7a95;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+body { background: var(--bg); color: var(--text); padding: 12px; min-height: 100vh; }
+.container { max-width: 520px; margin: 0 auto; }
+h2 { text-align: center; margin: 10px 0; color: var(--info); font-size: 1.3rem; }
+.chain-badge {
+    display: inline-block; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px;
+    margin-bottom: 10px;
+}
+.chain-sol { background: rgba(0,255,163,.15); color: var(--sol); }
+.chain-eth { background: rgba(98,126,234,.15); color: var(--eth); }
+.chain-bsc { background: rgba(243,186,47,.15); color: var(--bsc); }
+.chain-base { background: rgba(0,82,255,.15); color: var(--base); }
+.chain-arbitrum { background: rgba(40,160,240,.15); color: var(--arb); }
+.input-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; }
+select, input, button {
+    padding: 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); font-size: 15px;
+}
+button { background: var(--ok); border: none; font-weight: bold; cursor: pointer; color: #000; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid var(--border); }
+.score-ring {
+    width: 130px; height: 130px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 10px; font-size: 2.2rem; font-weight: bold; position: relative;
+}
+.score-inner { position: absolute; inset: 8px; border-radius: 50%; background: var(--bg); }
+.score-good { background: conic-gradient(var(--ok) 0% var(--p), #1a3a2f var(--p) 100%); }
+.score-mid { background: conic-gradient(var(--warn) 0% var(--p), #3a341e var(--p) 100%); }
+.score-bad { background: conic-gradient(var(--danger) 0% var(--p), #3a1e28 var(--p) 100%); }
+.row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.row:last-child { border-bottom: none; }
+.tag { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+.tag-real { background: rgba(0,255,157,.15); color: var(--ok); }
+.tag-free { background: rgba(255,170,0,.15); color: var(--warn); }
+.tag-dev { background: rgba(0,212,255,.15); color: var(--info); }
+.tag-burn { background: rgba(100,100,120,.2); color: #aaa; }
+.holder { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.links a { padding: 8px 12px; background: rgba(0,212,255,.1); border-radius: 6px; color: var(--info); text-decoration: none; font-size: 13px; }
+.hidden { display: none !important; }
+.loading { text-align: center; padding: 30px; }
+.spinner {
+    width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--info);
+    border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.tabs { display: flex; margin: 15px 0; border-bottom: 1px solid var(--border); }
+.tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; }
+.tab.active { border-bottom-color: var(--info); color: var(--info); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="container">
+<h2>🛡️ CryptoGuard PRO — Multi-Rede</h2>
 
-export default {
-  async fetch(request, env) {
-    const HELIUS_KEY = env.HELIUS_KEY || env.HELIUS_API_KEY;
-    const cors = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type"
-    };
+<div class="card">
+  <label style="font-size:13px;color:var(--muted)">🔗 Cloudflare Worker:</label>
+  <input id="workerUrl" placeholder="https://seu-worker.xxx.workers.dev" style="margin-top:6px">
+</div>
 
-    if (request.method === "OPTIONS") return new Response(null, { headers: cors });
-    if (!HELIUS_KEY) return Response.json({ error: "Falta HELIUS_KEY" }, { status: 500, headers: cors });
+<div class="input-row">
+  <select id="chainSelect">
+    <option value="auto">🔍 Detectar Automaticamente</option>
+    <option value="solana">🟢 Solana</option>
+    <option value="ethereum">🔷 Ethereum</option>
+    <option value="bsc">🟡 BSC (BNB)</option>
+    <option value="base">🔵 Base</option>
+    <option value="arbitrum">🔷 Arbitrum</option>
+  </select>
+  <input id="tokenAddress" placeholder="📋 Endereço do token..." autocomplete="off">
+  <button id="analyzeBtn" onclick="analyze()">🔍 Analisar</button>
+</div>
 
-    const RPC = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-    const url = new URL(request.url);
+<div id="loading" class="hidden loading">
+  <div class="spinner"></div>
+  <p>Analisando blockchain...</p>
+</div>
 
-    async function rpc(method, params) {
-      try {
-        const r = await fetch(RPC, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params })
-        });
-        const j = await r.json();
-        return j.result;
-      } catch (e) { return null; }
-    }
+<div id="result" class="hidden">
+  <div class="card">
+    <div id="chainBadge" class="chain-badge"></div>
+    <div class="score-ring" id="scoreRing">
+      <div class="score-inner"><span id="scoreVal">0</span></div>
+    </div>
+    <h3 id="tName">—</h3>
+    <p style="text-align:center;color:var(--muted)" id="tSym">—</p>
+  </div>
 
-    if (url.pathname === "/api/real") {
-      const address = url.searchParams.get("address");
-      if (!address) return Response.json({ error: "sem address" }, { status: 400, headers: cors });
+  <div class="card">
+    <h3>📊 Dados</h3>
+    <div class="row"><span>Idade</span><span id="rAge">—</span></div>
+    <div class="row"><span>Market Cap</span><span id="rMc">—</span></div>
+    <div class="row"><span>Liquidez</span><span id="rLiq">—</span></div>
+    <div class="row"><span>Volume 24h</span><span id="rVol">—</span></div>
+    <div class="row"><span>Compras</span><span id="rBuy">—</span></div>
+    <div class="row"><span>Queimado</span><span id="rBurn">—</span></div>
+    <div class="row"><span>Top 10 (%)</span><span id="rTop10">—</span></div>
+  </div>
 
-      try {
-        const [dexRes, rugRes, supplyData, largestData, sigsData] = await Promise.all([
-          fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`).then(r => r.json()).catch(() => null),
-          fetch(`https://api.rugcheck.xyz/v1/tokens/${address}/report`).then(r => r.ok ? r.json() : null).catch(() => null),
-          rpc("getTokenSupply", [address]),
-          rpc("getTokenLargestAccounts", [address]),
-          rpc("getSignaturesForAddress", [address, { limit: 100 }])
-        ]);
+  <div class="card">
+    <h3>🛡️ Auditoria</h3>
+    <div id="auditList"></div>
+  </div>
 
-        const pair = dexRes?.pairs?.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-        if (!pair) return Response.json({ error: "Token não encontrado" }, { status: 404, headers: cors });
+  <div class="card">
+    <h3>👤 Criador</h3>
+    <div class="row"><span>Carteira</span><span id="devAddr" style="font-size:11px;word-break:break-all">—</span></div>
+    <div class="row"><span>Já vendeu</span><span id="devSold">—</span></div>
+  </div>
 
-        const rug = rugRes || null;
-        const totalSupply = supplyData?.value?.uiAmount || 1;
-        const largest = largestData?.value || [];
-        const sigs = sigsData || [];
+  <div class="card">
+    <h3>👥 Top Detentores</h3>
+    <div id="holdersList"></div>
+  </div>
 
-        const burns = ["11111111111111111111111111111111", "1nc1nerator11111111111111111111111111111111"];
-        let burnt = 0;
-        largest.forEach(a => { if (burns.includes(a.address)) burnt += a.uiAmount || 0; });
-        const burntPct = (burnt / totalSupply) * 100;
+  <div class="card">
+    <h3>🔗 Links</h3>
+    <div class="links" id="linksBox"></div>
+  </div>
 
-        const devAddr = rug?.creator || null;
-        const top20 = largest.slice(0, 20).map((acc, i) => {
-          const pct = (acc.uiAmount / totalSupply) * 100;
-          return { rank: i + 1, address: acc.address, amount: acc.uiAmount, pct, isBurn: burns.includes(acc.address), isDev: devAddr === acc.address };
-        });
-        const top10Pct = top20.slice(0, 10).reduce((s, a) => s + a.pct, 0);
-        const top20Pct = top20.reduce((s, a) => s + a.pct, 0);
+  <button onclick="save()" style="width:100%">💾 Salvar</button>
+</div>
 
-        let bundlePct = 0;
-        if (sigs.length >= 5) {
-          const slots = sigs.slice(0, 20).map(s => s.slot).filter(Boolean);
-          const unique = new Set(slots);
-          bundlePct = ((slots.length - unique.size) / slots.length) * 100;
-        }
-        let snipers = 0;
-        if (sigs.length > 0) {
-          const firstSlot = sigs[sigs.length - 1].slot;
-          snipers = sigs.filter(s => s.slot === firstSlot).length;
-        }
-        const fakeHolders = top20.filter(h => h.pct < 0.01 && h.pct > 0).length;
-        const fakeHoldersPct = largest.length ? (fakeHolders / largest.length * 100) : 0;
-        const buys = pair.txns?.h24?.buys || 0;
-        const sells = pair.txns?.h24?.sells || 0;
-        const totalTx = buys + sells;
-        const buyRatio = totalTx ? buys / totalTx : 0.5;
-        const fakeVolPct = Math.min(100, Math.abs(0.5 - buyRatio) * 200);
+<div class="tabs">
+  <div class="tab active" data-tab="analyze">Análise</div>
+  <div class="tab" data-tab="hist">Histórico</div>
+</div>
 
-        let devSol = 0, devSoldPct = 0;
-        if (devAddr) {
-          try {
-            const [bal, devTokens] = await Promise.all([
-              rpc("getBalance", [devAddr]),
-              rpc("getTokenAccountsByOwner", [devAddr, { mint: address }, { encoding: "jsonParsed" }])
-            ]);
-            devSol = (bal?.value || 0) / 1e9;
-            const holding = devTokens?.value?.[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0;
-            const devTop = top20.find(t => t.isDev);
-            if (devTop && devTop.amount > 0) devSoldPct = Math.max(0, (1 - holding / devTop.amount) * 100);
-          } catch (e) {}
-        }
+<div id="histTab" class="hidden">
+  <div class="card">
+    <h3>📝 Salvas</h3>
+    <div id="histList"></div>
+    <button onclick="clearHist()" style="background:var(--danger);margin-top:10px;width:100%">🗑️ Limpar</button>
+  </div>
+</div>
 
-        const ageMs = Date.now() - (pair.pairCreatedAt || Date.now());
-        const ageH = Math.floor(ageMs / 3600000);
-        const ageText = ageH < 24 ? `${ageH}h` : `${Math.floor(ageH / 24)}d`;
+</div>
 
-        const mintAuth = rug?.mintAuthority || rug?.token?.mintAuthority || null;
-        const freezeAuth = rug?.freezeAuthority || rug?.token?.freezeAuthority || null;
-        const lpLocked = rug?.markets?.[0]?.lp?.lpLockedPct || 0;
+<script>
+let last = null;
 
-        let score = 100;
-        const audit = [];
-        if (mintAuth) { score -= 25; audit.push({ check: "Mint Authority", pass: false, desc: "Ativo — pode emitir mais" }); }
-        else audit.push({ check: "Mint Authority", pass: true, desc: "Desativado" });
-        if (freezeAuth) { score -= 20; audit.push({ check: "Freeze Authority", pass: false, desc: "Ativo — pode congelar" }); }
-        else audit.push({ check: "Freeze Authority", pass: true, desc: "Desativado" });
-        if (bundlePct > 50) { score -= 15; audit.push({ check: "Bundle", pass: false, desc: bundlePct.toFixed(0) + "% mesmo bloco" }); }
-        else audit.push({ check: "Bundle", pass: true, desc: bundlePct.toFixed(0) + "% mesmo bloco" });
-        if (burntPct < 1) { score -= 5; audit.push({ check: "Burn", pass: false, desc: burntPct.toFixed(2) + "% baixo" }); }
-        else audit.push({ check: "Burn", pass: true, desc: burntPct.toFixed(2) + "%" });
-        if (devSoldPct > 50) { score -= 20; audit.push({ check: "Dev Sold", pass: false, desc: devSoldPct.toFixed(0) + "% vendido" }); }
-        else audit.push({ check: "Dev Sold", pass: true, desc: devSoldPct.toFixed(0) + "% vendido" });
-        if (top10Pct > 60) { score -= 20; audit.push({ check: "Top 10", pass: false, desc: top10Pct.toFixed(1) + "%" }); }
-        else audit.push({ check: "Top 10", pass: true, desc: top10Pct.toFixed(1) + "%" });
-        score = Math.max(0, Math.min(100, Math.round(score)));
+// Carrega config
+const savedW = localStorage.getItem('workerUrl');
+if (savedW) document.getElementById('workerUrl').value = savedW;
+document.getElementById('workerUrl').oninput = () => localStorage.setItem('workerUrl', document.getElementById('workerUrl').value);
 
-        return Response.json({
-          pair, rug, score, audit,
-          real: {
-            address, name: pair.baseToken?.name, symbol: pair.baseToken?.symbol,
-            ageText, mc: pair.fdv || pair.marketCap || 0, liqUsd: pair.liquidity?.usd || 0,
-            vol24h: pair.volume?.h24 || 0, dex: pair.dexId || 'unknown',
-            priceUsd: pair.priceUsd, ch24: pair.priceChange?.h24 || 0,
-            top10Pct, top20Pct, burntPct, bundlePct, fakeVolPct, fakeHolders, fakeHoldersPct,
-            hodls: rug?.totalHolders || largest.length, snipers,
-            mintAuth: !!mintAuth, freezeAuth: !!freezeAuth,
-            top20, dev: { address: devAddr, sol: devSol, soldPct: devSoldPct }
-          }
-        }, { headers: cors });
-      } catch (e) {
-        return Response.json({ error: e.message }, { status: 500, headers: cors });
-      }
-    }
+// Abas
+document.querySelectorAll('.tab').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const isHist = t.dataset.tab === 'hist';
+    document.getElementById('result').classList.toggle('hidden', isHist);
+    document.getElementById('histTab').classList.toggle('hidden', !isHist);
+    if (isHist) renderHist();
+  };
+});
 
-    if (url.pathname === "/api/wallets") {
-      const address = url.searchParams.get("address");
-      const start = parseInt(url.searchParams.get("start") || "0");
-      const end = parseInt(url.searchParams.get("end") || "10");
-      if (!address) return Response.json({ error: "sem address" }, { status: 400, headers: cors });
-      try {
-        const largestData = await rpc("getTokenLargestAccounts", [address]);
-        const largest = (largestData?.value || []).slice(start, end);
-        const wallets = await Promise.all(largest.map(async (acc) => {
-          let tipo = "RECEBEU", detalhe = "Recebeu sem gastar SOL";
-          try {
-            const sigsData = await rpc("getSignaturesForAddress", [acc.address, { limit: 3 }]);
-            if (sigsData && sigsData.length > 0) {
-              const txData = await rpc("getTransaction", [sigsData[0].signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]);
-              if (txData) {
-                const pre = txData.meta?.preBalances || [];
-                const post = txData.meta?.postBalances || [];
-                const solDiff = (post[0] || 0) - (pre[0] || 0);
-                if (solDiff < -1000000) { tipo = "COMPROU"; detalhe = "Comprou " + Math.abs(solDiff / 1e9).toFixed(2) + " SOL"; }
-              }
-            }
-          } catch (e) {}
-          return { address: acc.address, amount: acc.uiAmount, tipo, detalhe };
-        }));
-        return Response.json({ wallets }, { headers: cors });
-      } catch (e) {
-        return Response.json({ error: e.message }, { status: 500, headers: cors });
-      }
-    }
+async function analyze() {
+  const addr = document.getElementById('tokenAddress').value.trim();
+  const chain = document.getElementById('chainSelect').value;
+  const worker = document.getElementById('workerUrl').value.trim();
+  
+  if (!addr) return alert('Cole o endereço!');
+  if (!worker.startsWith('http')) return alert('Coloque o endereço do Worker!');
+  
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true;
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('result').classList.add('hidden');
 
-    return new Response(getHTML(), { headers: { "content-type": "text/html;charset=UTF-8" } });
+  try {
+    const res = await fetch(`${worker}/api/real?address=${encodeURIComponent(addr)}&chain=${chain}`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    
+    last = { ...data, address: addr };
+    render(data, addr);
+    
+  } catch (e) {
+    alert(`Erro: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    document.getElementById('loading').classList.add('hidden');
   }
-};
+}
+
+function render(d, addr) {
+  // Rede
+  const badge = document.getElementById('chainBadge');
+  badge.textContent = d.chain.toUpperCase();
+  badge.className = `chain-badge chain-${d.chain}`;
+
+  // Nota
+  const ring = document.getElementById('scoreRing');
+  ring.classList.remove('score-good','score-mid','score-bad');
+  ring.style.setProperty('--p', `${d.score}%`);
+  ring.classList.add(d.score>=70?'score-good':d.score>=40?'score-mid':'score-bad');
+  document.getElementById('scoreVal').textContent = d.score;
+
+  // Dados
+  document.getElementById('tName').textContent = d.real.name;
+  document.getElementById('tSym').textContent = d.real.symbol?`(${d.real.symbol})`:'';
+  document.getElementById('rAge').textContent = d.real.ageText;
+  document.getElementById('rMc').textContent = d.real.mc?`$${fmt(d.real.mc)}`:'—';
+  document.getElementById('rLiq').textContent = d.real.liqUsd?`$${fmt(d.real.liqUsd)}`:'—';
+  document.getElementById('rVol').textContent = d.real.vol24h?`$${fmt(d.real.vol24h)}`:'—';
+  document.getElementById('rBuy').textContent = d.real.buyRatio?`${(d.real.buyRatio*100).toFixed(0)}%`:'—';
+  document.getElementById('rBurn').textContent = d.real.burntPct?`${d.real.burntPct.toFixed(2)}%`:'—';
+  document.getElementById('rTop10').textContent = `${d.real.top10Pct.toFixed(1)}%`;
+
+  // Auditoria
+  document.getElementById('auditList').innerHTML = d.audit.map(x => `
+    <div class="row"><span>${x.check}</span><span style="color:${x.pass?'var(--ok)':'var(--danger)'}">${x.pass?'✅':'❌'} ${x.desc}</span></div>
+  `).join('');
+
+  // Dev
+  document.getElementById('devAddr').textContent = d.dev?.fullAddr?.slice(0,16)+'...' || '—';
+  document.getElementById('devSold').textContent = d.dev?.soldPct !== undefined ? `${d.dev.soldPct}%` : '—';
+
+  // Detentores
+  document.getElementById('holdersList').innerHTML = d.top20.slice(0,10).map(h => {
+    let tc = 'tag-real';
+    if (h.isBurn) tc = 'tag-burn';
+    else if (h.isDev) tc = 'tag-dev';
+    else if (h.type === 'RECEBEU') tc = 'tag-free';
+    return `
+      <div class="holder">
+        <div style="display:flex;justify-content:space-between">
+          <span>#${h.rank} ${h.address}</span>
+          <span class="tag ${tc}">${h.type}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:4px">
+          <span>${h.pct.toFixed(2)}%</span>
+          <span>${h.detail || ''}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Links
+  const links = {
+    solana: [`https://solscan.io/token/${addr}`, 'Solscan'],
+    ethereum: [`https://etherscan.io/token/${addr}`, 'Etherscan'],
+    bsc: [`https://bscscan.com/token/${addr}`, 'BscScan'],
+    base: [`https://basescan.org/token/${addr}`, 'BaseScan'],
+    arbitrum: [`https://arbiscan.io/token/${addr}`, 'ArbiScan']
+  };
+  const [explorer, name] = links[d.chain] || links.solana;
+  document.getElementById('linksBox').innerHTML = `
+    <a href="https://dexscreener.com/${d.chain}/${addr}" target="_blank">📊 DexScreener</a>
+    <a href="https://rugcheck.xyz/tokens/${addr}" target="_blank">🛡️ RugCheck</a>
+    <a href="${explorer}" target="_blank">📋 ${name}</a>
+  `;
+
+  document.getElementById('result').classList.remove('hidden');
+}
+
+function fmt(n) {
+  if (!n && n !== 0) return '—';
+  if (n >= 1e6) return (n/1e6).toFixed(2)+'M';
+  if (n >= 1e3) return (n/1e3).toFixed(2)+'K';
+  return n.toFixed(2);
+}
+
+function save() {
+  if (!last) return alert('Nada para salvar!');
+  const arr = JSON.parse(localStorage.getItem('saved') || '[]');
+  arr.unshift({ ...last, at: new Date().toLocaleString('pt-BR') });
+  localStorage.setItem('saved', JSON.stringify(arr.slice(0,50)));
+  alert('✅ Salvo!');
+}
+
+function renderHist() {
+  const arr = JSON.parse(localStorage.getItem('saved') || '[]');
+  document.getElementById('histList').innerHTML = arr.length ? arr.map((x,i) => `
+    <div style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer" onclick="loadHist(${i})">
+      <div style="display:flex;justify-content:space-between">
+        <strong>${x.real?.name || 'Token'}</strong>
+        <span style="color:${x.score>=70?'var(--ok)':x.score>=40?'var(--warn)':'var(--danger)'}">${x.score}/100</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">${x.at} · ${x.chain}</div>
+    </div>
+  `).join('') : '<p style="text-align:center;color:var(--muted)">Nenhuma ainda</p>';
+}
+
+function loadHist(i) {
+  const arr = JSON.parse(localStorage.getItem('saved') || '[]');
+  last = arr[i];
+  document.getElementById('tokenAddress').value = last.address;
+  document.querySelector('[data-tab="analyze"]').click();
+  render(last, last.address);
+}
+
+function clearHist() {
+  if (confirm('Apagar tudo?')) { localStorage.removeItem('saved'); renderHist(); }
+}
+
+document.getElementById('tokenAddress').addEventListener('keydown', e => e.key==='Enter' && analyze());
+</script>
+</body>
+</html>
+  

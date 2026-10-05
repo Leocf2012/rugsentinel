@@ -16,4 +16,10 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy worker.js --name rugsentinel
+          command: deploy
+          secrets: |
+            HELIUS_KEY
+            COINGECKO_KEY
+            CMC_KEY
+            ETHERSCAN_KEY
+            PAPRIKA_KEY

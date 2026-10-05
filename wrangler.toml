@@ -2,3 +2,6 @@ name = "rugsentinel"
 main = "worker.js"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
+
+[vars]
+HELIUS_KEY = "17c095a4-64a0-4a09-a544-f2f9905bff0c"
